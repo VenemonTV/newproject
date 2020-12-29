@@ -1,0 +1,257 @@
+<?php
+    require_once("inc/config.php");
+    require_once("inc/check.php");
+    require_once("inc/Mailin.php");
+	use Sendinblue\Mailin;
+	
+	$mailin = new Mailin('https://api.sendinblue.com/v2.0','rD6fHNbBVdxCLI5T', 5000);
+	
+    if($logged == true){
+        header("Location: index.php");
+        exit;
+    }
+    
+    if(isset($_POST['login'])){
+        $username = htmlentities($_POST['username'], ENT_QUOTES);
+        $usernamel = strtolower($username);
+        $password = htmlentities($_POST['password'], ENT_QUOTES);
+        $check = true;
+        
+        if(empty($username)){
+            $check = false;
+            $error = "Username is blank.";
+        }
+        
+        if(empty($password)){
+            $check = false;
+            $error = "Password is blank.";
+        }
+        
+        $stmt2 = $db->prepare("SELECT * FROM users WHERE usernamel = :usernamel");
+        $stmt2->execute(array(':usernamel' => $usernamel));
+        $row2 = $stmt2->fetch();
+		
+		$stmt3 = $db->prepare("SELECT * FROM users WHERE usernameol = :usernameol");
+        $stmt3->execute(array(':usernameol' => $usernamel));
+        $row3 = $stmt3->fetch();
+		
+		if($usernamel != $row2['usernamel'] AND $row3['usernameol'] != $usernamel){
+            $check = false;
+            $error = "Invalid password.";
+        }
+		
+        $password = password_verify($password, $row2['password']);
+        
+        if($row2['password'] != $password){
+            $check = false;
+            $error = "Invalid password.";
+        }
+        
+		$response = htmlentities($_POST['g-recaptcha-response'], ENT_QUOTES);
+		$url = "https://www.google.com/recaptcha/api/siteverify?secret=6LdimygUAAAAANk1-aODffBaRDRSqD-0RO1QtW3B&response=" . $response;
+		$get = file_get_contents($url);
+		$json = json_decode($get);
+		
+		if($json->success == false){
+			$check = false;
+            $error = "Invalid captcha.";
+		}
+		
+        if($check == true){
+			if($usernamel != $row3['usernameol']){
+				if($row2['auth'] == 0){
+					$code = "DO_NOT_SHARE_THIS_STEALS_ACCOUNTS_" . bin2hex(random_bytes(500));
+					
+					$stmt = $db->prepare("UPDATE users SET code = :code WHERE id = :id");
+					$stmt->execute(array(':code' => $code, ':id' => $row2['id']));
+					
+					setcookie("code", $code, time() + 3600 * 24 * 30, "/");
+					header("Location: index.php");
+					exit;
+				}
+				
+				$authcode = $_COOKIE['2fa'];
+				
+				if($row2['auth'] == 1 AND $row2['authcode'] == $authcode AND !empty($authcode)){
+					$code = "DO_NOT_SHARE_THIS_STEALS_ACCOUNTS_" . bin2hex(random_bytes(500));
+					
+					$stmt = $db->prepare("UPDATE users SET code = :code WHERE id = :id");
+					$stmt->execute(array(':code' => $code, ':id' => $row2['id']));
+					
+					setcookie("code", $code, time() + 3600 * 24 * 30, "/");
+					header("Location: index.php");
+					exit;
+				}
+				
+				if(empty($authcode) AND $row2['auth'] == 1){
+					$code = bin2hex(random_bytes(15));
+					
+					$stmt = $db->prepare("INSERT INTO 2fa (uid, code) VALUES (:uid, :code)");
+					$stmt->execute(array(':uid' => $row2['id'], ':code' => $code));
+					
+					$data = array(
+						"to" => array($row2['emaill'] => $row2['emaill']),
+						"from" => array("2fa@world2build.org", "2fa"),
+						"replyto" => array("2fa@world2build.org", "2fa"),
+						"subject" => "World2Build 2FA",
+						"text" => "Your code is: " . $code,
+						"headers" => array("Content-Type"=> "text/html; charset=iso-8859-1","X-Mailin-IP"=> "102.102.1.2")
+					);
+
+					$mailin->send_email($data);
+					
+					header("Location: 2fa.php");
+					exit;
+				}
+				
+				if($row2['auth'] == 1 AND $row2['authcode'] != $authcode){
+					$code = bin2hex(random_bytes(15));
+					
+					$stmt = $db->prepare("INSERT INTO 2fa (uid, code) VALUES (:uid, :code)");
+					$stmt->execute(array(':uid' => $row2['id'], ':code' => $code));
+					
+					$data = array(
+						"to" => array($row2['emaill'] => $row2['emaill']),
+						"from" => array("2fa@world2build.org", "2fa"),
+						"replyto" => array("2fa@world2build.org", "2fa"),
+						"subject" => "World2Build 2FA",
+						"text" => "Your code is: " . $code,
+						"headers" => array("Content-Type"=> "text/html; charset=iso-8859-1","X-Mailin-IP"=> "102.102.1.2")
+					);
+
+					$mailin->send_email($data);
+					
+					header("Location: 2fa.php");
+					exit;
+				}
+			} else {
+				if($row3['auth'] == 0){
+					$code = "DO_NOT_SHARE_THIS_STEALS_ACCOUNTS_" . bin2hex(random_bytes(500));
+					
+					$stmt = $db->prepare("UPDATE users SET code = :code WHERE id = :id");
+					$stmt->execute(array(':code' => $code, ':id' => $row3['id']));
+					
+					setcookie("code", $code, time() + 3600 * 24 * 30, "/");
+					header("Location: index.php");
+					exit;
+				}
+				
+				$authcode = $_COOKIE['2fa'];
+				
+				if($row3['auth'] == 1 AND $row3['authcode'] == $authcode AND !empty($authcode)){
+					$code = "DO_NOT_SHARE_THIS_STEALS_ACCOUNTS_" . bin2hex(random_bytes(500));
+					
+					$stmt = $db->prepare("UPDATE users SET code = :code WHERE id = :id");
+					$stmt->execute(array(':code' => $code, ':id' => $row3['id']));
+					
+					setcookie("code", $code, time() + 3600 * 24 * 30, "/");
+					header("Location: index.php");
+					exit;
+				}
+				
+				if(empty($authcode) AND $row3['auth'] == 1){
+					$code = bin2hex(random_bytes(15));
+					
+					$stmt = $db->prepare("INSERT INTO 2fa (uid, code) VALUES (:uid, :code)");
+					$stmt->execute(array(':uid' => $row3['id'], ':code' => $code));
+					
+					$data = array(
+						"to" => array($row3['emaill'] => $row3['emaill']),
+						"from" => array("2fa@world2build.org", "2fa"),
+						"replyto" => array("2fa@world2build.org", "2fa"),
+						"subject" => "World2Build 2FA",
+						"text" => "Your code is: " . $code,
+						"headers" => array("Content-Type"=> "text/html; charset=iso-8859-1","X-Mailin-IP"=> "102.102.1.2")
+					);
+
+					$mailin->send_email($data);
+					
+					header("Location: 2fa.php");
+					exit;
+				}
+				
+				if($row3['auth'] == 1 AND $row3['authcode'] != $authcode){
+					$code = bin2hex(random_bytes(15));
+					
+					$stmt = $db->prepare("INSERT INTO 2fa (uid, code) VALUES (:uid, :code)");
+					$stmt->execute(array(':uid' => $row3['id'], ':code' => $code));
+					
+					$data = array(
+						"to" => array($row3['emaill'] => $row3['emaill']),
+						"from" => array("2fa@world2build.org", "2fa"),
+						"replyto" => array("2fa@world2build.org", "2fa"),
+						"subject" => "World2Build 2FA",
+						"text" => "Your code is: " . $code,
+						"headers" => array("Content-Type"=> "text/html; charset=iso-8859-1","X-Mailin-IP"=> "102.102.1.2")
+					);
+
+					$mailin->send_email($data);
+					
+					header("Location: 2fa.php");
+					exit;
+				}
+			}
+        }
+    }
+    
+    $page = "Login";
+    require_once("inc/header.php");
+?>
+    <br>
+    <br>
+    <div class="container">
+        <div class="container">
+            <div class="container">
+                <div class="row">
+                    <div class="col s12 m12">
+                        <?php
+                            if(isset($_POST['login'])){
+                                if($check == false){
+                                    echo '
+                                        <script>
+                                            $(document).ready(function(){
+                                               Materialize.toast("' . $error . '", 4000)
+                                            });
+                                        </script>
+                                    ';
+                                }
+                            }
+                        ?>
+                        <div class="card">
+                            <div class="card-content">
+                                <span class="card-title">Login</span>
+                                <form action="" method="POST">
+                                    <div class="row">
+                                        <div class="input-field col s12">
+                                            <input id="username" placeholder="Username" name="username" type="text" class="validate">
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="input-field col s12">
+                                            <input id="password" placeholder="Password" name="password" type="password" class="validate">
+                                        </div>
+                                    </div>
+									<div class="row">
+										<div class="input-field col s12">
+											<div class="g-recaptcha" data-sitekey="6LdimygUAAAAAI0ty5gVE5AbJ-K1try5eVyRKZ5V"></div>
+										</div>
+									</div>
+                                    <div class="row">
+                                        <div class="input-field col s12 m4">
+                                            <input type="submit" name="login" class="waves-effect waves-light btn-large blue white-text" value="Login">
+                                        </div>
+                                        <div class="input-field col s12 m8">
+                                            <label><a href="forgot.php">I forgot my password.</a></label>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+<?php
+    require_once("inc/footer.php");
+?>
